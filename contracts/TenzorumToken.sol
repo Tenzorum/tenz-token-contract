@@ -10,7 +10,7 @@ import "./ApproveAndCall.sol";
 //
 // Symbol      : TENZ
 // Name        : Tenzorum Token
-// Total supply: 768,977,778
+// Total supply: 1,237,433,627
 // Decimals    : 18
 //
 // Author: Radek Ostrowski / https://startonchain.com
@@ -37,14 +37,17 @@ contract TenzorumToken is MultiOwnable {
     uint8 public constant decimals = 18;
     uint256 public totalSupply;
 
-    uint256 public constant initialSupply = 768977778 * (10 ** uint256(decimals));
+    uint256 public constant initialSupply = 1237433627 * (10 ** uint256(decimals));
     uint256 public constant maxSupply = initialSupply * 2;
-    uint256 public constant d = 5000;
-    uint256 public constant r = 999993504905839000;
+
+    uint256 public constant a1 = 2354325774353120243531;
+    uint256 public constant r = 2239657547574836; //r is negative
+
     //Single time period is equal to 10 minutes - 600 seconds;
-    uint256 public constant ts = 10 minutes;
+    uint256 public constant periodUnit = 10 minutes;
     //Time when tokens become openly transferable - period zero
-    uint256 public t0;
+    uint256 public firstPeriodStart;
+    uint256 public constant lastPeriod = 1051200;
 
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) internal allowed;
@@ -203,22 +206,30 @@ contract TenzorumToken is MultiOwnable {
         return true;
     }
 
+    function currentPeriod() view returns (uint256) {
+        if(firstPeriodStart == 0) return 0;
+        return (now - firstPeriodStart).div(periodUnit);
+    }
+
+    function maxAllowedSupply(uint256 _period) view returns (uint256) {
+        if(_period == 0) return initialSupply;
+        if(_period >= lastPeriod) return maxSupply;
+
+        //sum of newly minted tokens at given period
+        uint256 sn = _period*(2*a1-r*(_period-1))/2;
+
+        uint256 currentMaxSupply = initialSupply + sn;
+        if(currentMaxSupply > maxSupply) return maxSupply;
+        return currentMaxSupply;
+    }
+
     /**
      * @dev Mints a specific amount of tokens restricted by the total supply formulae
      * @param _value The amount of tokens to be minted,
      *               if bigger than the allowed amount the maximum allowed amount will be minted
      */
     function mint(address _recipient, uint256 _value) anyOwner canTransfer public returns (uint256) {
-
-        //current time period
-        uint256 t = (now - t0).div(ts);
-        if (t == 0) {
-            return 0;
-        }
-
-        uint256 currentMaxAllowedSupply = d.mul(r.pow(t - 1));
-        if (currentMaxAllowedSupply > maxSupply) currentMaxAllowedSupply = maxSupply;
-
+        uint256 currentMaxAllowedSupply = maxAllowedSupply(currentPeriod());
         uint256 allowedToMint = currentMaxAllowedSupply.sub(totalSupply);
         uint256 mintAmount;
         if (allowedToMint < _value) {
@@ -240,7 +251,7 @@ contract TenzorumToken is MultiOwnable {
     function enableTransfers() anyOwner public {
         require(!transferable);
         transferable = true;
-        t0 = now;
+        firstPeriodStart = now;
         emit TransfersEnabled();
     }
 

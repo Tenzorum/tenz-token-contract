@@ -7,10 +7,29 @@ let user1;
 let user2;
 let token;
 
-let initSupply = web3.toWei("768977778", 'ether');
-let moreThenTotalSupply = web3.toWei("768977779", 'ether');
-let oneToken = web3.toWei("1", 'ether');
-let twoTokens = web3.toWei("2", 'ether');
+const initSupply = web3.toWei("1237433627", 'ether');
+const maxSupply = web3.toWei("2474867254", 'ether');
+const moreThenTotalSupply = web3.toWei("2474867255", 'ether');
+const oneToken = web3.toWei("1", 'ether');
+const twoTokens = web3.toWei("2", 'ether');
+const threeBillionTokens = web3.toWei("3000000000", 'ether');;
+const periodUnit = 600;
+const lastPeriod = 1051200;
+
+function increaseTime(addSeconds) {
+    web3.currentProvider.send({
+        jsonrpc: "2.0",
+        method: "evm_increaseTime",
+        params: [addSeconds],
+        id: 0
+    });
+    web3.currentProvider.send({
+        jsonrpc: "2.0",
+        method: "evm_mine",
+        params: [],
+        id: 0
+    });
+}
 
 contract('Tenzorum Token', (accounts) => {
 
@@ -319,5 +338,116 @@ contract('Tenzorum Token', (accounts) => {
         await token.removeOwner(user1);
         assert(!await token.owners.call(user1), "shouldnt be owner");
     });
+
+    it("Token minting works as expected", async () => {
+        assert(0 == (await token.firstPeriodStart.call()).toNumber(), "firstPeriodStart is not set yet");
+        await token.mint(user1, oneToken, {from: owner});
+        assert(0 == (await token.balanceOf.call(user1)).toNumber(), "shouldn't mint any tokens at this point");
+
+        await token.enableTransfers();
+        assert((await token.firstPeriodStart.call()).toNumber() > 0, "firstPeriodStart is set");
+
+        await token.mint(user1, threeBillionTokens, {from: owner});
+        //shouldn't mint any tokens yet as no periods have passed
+        assert(0 == (await token.balanceOf.call(user1)).toNumber(), "should mint 0 tokens at this point");
+
+        try {
+            await token.mint(user1, oneToken, {from: user1});
+            assert(false);
+        } catch (e) {
+            expectRevert(e, "Cannot mint token when not owner");
+        }
+
+        let i;
+        const expectedMintedTokenAmounts = [2354, 4708, 7062, 9417, 11771];
+        for(i=0; i<5; i++){
+            //go into future period
+            increaseTime(periodUnit);
+            await token.mint(user1, threeBillionTokens, {from: owner});
+            assert(expectedMintedTokenAmounts[i] == Math.floor(web3.fromWei(await token.balanceOf.call(user1), "ether").toNumber()));
+        }
+
+        increaseTime(periodUnit);
+        await token.mint(user1, oneToken, {from: owner});
+        assert(11771+1 == Math.floor(web3.fromWei(await token.balanceOf.call(user1), "ether").toNumber()), "minted one token");
+
+        //beyond 2 years should not mint more tokens, limited by maxSupply
+        increaseTime(lastPeriod*periodUnit);
+        await token.mint(user1, threeBillionTokens, {from: owner});
+        assert(maxSupply == (await token.totalSupply.call()).toNumber(), "shouldn't mint any more tokens at this point");
+    });
+
+    it("currentPeriod works correctly", async () => {
+        assert(0 == (await token.firstPeriodStart.call()), "firstPeriodStart is not set yet");
+        assert(0 == await token.currentPeriod.call(), "current period should be 0");
+
+        await token.enableTransfers();
+        assert(0 == await token.currentPeriod.call(), "current period should still be 0");
+
+        increaseTime(periodUnit);
+        assert(1 == await token.currentPeriod.call(), "current period should still be 1");
+
+        increaseTime(periodUnit);
+        assert(2 == await token.currentPeriod.call(), "current period should still be 2");
+    });
+
+    it("maxAllowedSupply works correctly", async () => {
+        assert(0 == (await token.firstPeriodStart.call()), "firstPeriodStart is not set yet");
+        assert(initSupply == (await token.maxAllowedSupply.call(0)).toNumber(), "minting not started, should be at initial supply");
+
+        await token.enableTransfers();
+        assert((await token.firstPeriodStart.call()).toNumber() > 0, "firstPeriodStart is set");
+
+        const expectedFirstValues = [1237433627, 1237435981, 1237438335, 1237440689, 1237443044, 1237445398, 1237447752, 1237450107, 1237452461, 1237454815, 1237457170];
+        let i;
+        for(i = 0; i <= 10; i++) {
+            assert(expectedFirstValues[i] == Math.floor(web3.fromWei((await token.maxAllowedSupply.call(i)).toNumber(), 'ether')));
+        }
+
+        //periods 1051197-1051202
+        const expectedLastValues = [2474867253, 2474867253, 2474867254, 2474867254, 2474867254, 2474867254];
+        for(i = 0; i < 6; i++) {
+            let j = i + 1051197;
+            assert(expectedLastValues[i] == Math.floor(web3.fromWei((await token.maxAllowedSupply.call(j)).toNumber(), 'ether')));
+        }
+    });
+
+    // let BigNumber = require('bignumber.js');
+    // ------
+    // it("helper", async () => {
+    //
+    //     //Sn = n*(2*a1+(n−1)*r)/2 = n*(a1+an)/2
+    //     //an = a1 + (n-1)*r  => r=(an-a1)/(n-1)
+    //     //a1 = 2*Sn/n - an
+    //
+    //     const Sn = new BigNumber(web3.toWei('1237433627','ether')); //total minted tokens
+    //
+    //     const n = new BigNumber("1051202"); //last period
+    //     const an = 0; //tokens minted at last period
+    //
+    //     //let a1 = new BigNumber(web3.toWei('2354.3257743531203' , 'ether')); //2*Sn/n - an;
+    //     let a1 = Sn.times(2).div(n);
+    //     console.log("a1", a1.toString());
+    //
+    //     //let r = new BigNumber(web3.toWei('0.002239657547574836', 'ether')); //(an-a1)/(n-1); //r is negative
+    //     let r = a1.div(n-1);
+    //     console.log("r",r.toString());
+    //
+    //     let i;
+    //     let sum = 0;
+    //     console.log("period;", "tokens-issued-at-period;", "sum-of-tokens-issued;","calculated-sum");
+    //     for(i=1; i<=n; i++){
+    //         //sum += a1+(i-1)*r;
+    //         const big_i = new BigNumber(i);
+    //         const sn_i = big_i.times(a1.times(2).minus( (r.times(big_i.minus(1)))).div(2));
+    //
+    //         if(i < 10 || i % 100000 == 0 || i >= n-5) console.log(i, sn_i.plus(initSupply).toString()); //console.log(i, a1+(i-1)*r, sn_i, sum);
+    //     }
+    //
+    //     console.log(Sn.toString(), Sn.plus(initSupply).toString());
+    //     //console.log("sum",sum);
+    //     //console.log("total", n*(a1+an)/2);
+    //
+    // });
 
 });

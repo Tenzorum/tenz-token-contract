@@ -44,10 +44,4 @@ library SafeMath {
         return c;
     }
 
-    function pow(uint256 a, uint256 b) internal pure returns (uint256) {
-        uint256 c = a ** b;
-        //TODO: Make sure it's safe
-        return c;
-    }
-
 }

@@ -8,10 +8,11 @@ import "./ApproveAndCall.sol";
 // ---------------------------------------------------------------------
 // 'Tenzorum Token - TENZ' token contract: https://tenzorum.org
 //
-// Symbol      : TENZ
-// Name        : Tenzorum Token
-// Total supply: 1,237,433,627
-// Decimals    : 18
+// Symbol         : TENZ
+// Name           : Tenzorum Token
+// Initial supply : 1,237,433,627
+// Total supply   : 2,474,867,254 - 2 * initial supply, minted over 20 years
+// Decimals       : 18
 //
 // Author: Radek Ostrowski / https://startonchain.com
 // ---------------------------------------------------------------------
@@ -206,11 +207,18 @@ contract TenzorumToken is MultiOwnable {
         return true;
     }
 
+    /**
+     * @dev Calculates current minting period.
+     */
     function currentPeriod() view returns (uint256) {
         if(firstPeriodStart == 0) return 0;
         return (now - firstPeriodStart).div(periodUnit);
     }
 
+    /**
+     * @dev Calculates maximum allowed token supply for given minting period.
+     * @param _period Input minting period to calculate the max token supply from.
+     */
     function maxAllowedSupply(uint256 _period) view returns (uint256) {
         if(_period == 0) return initialSupply;
         if(_period >= lastPeriod) return maxSupply;
@@ -228,21 +236,17 @@ contract TenzorumToken is MultiOwnable {
      * @param _value The amount of tokens to be minted,
      *               if bigger than the allowed amount the maximum allowed amount will be minted
      */
-    function mint(address _recipient, uint256 _value) anyOwner canTransfer public returns (uint256) {
+    function mint(address _recipient, uint256 _value) anyOwner canTransfer public returns (uint256 mintAmount) {
         uint256 currentMaxAllowedSupply = maxAllowedSupply(currentPeriod());
         uint256 allowedToMint = currentMaxAllowedSupply.sub(totalSupply);
-        uint256 mintAmount;
         if (allowedToMint < _value) {
             mintAmount = allowedToMint;
         } else {
             mintAmount = _value;
         }
-
         totalSupply = totalSupply.add(mintAmount);
         balances[_recipient] = balances[_recipient].add(mintAmount);
         emit Transfer(address(0), _recipient, mintAmount);
-
-        return mintAmount;
     }
 
     /**

@@ -10,9 +10,12 @@ import "./ApproveAndCall.sol";
 //
 // Symbol         : TENZ
 // Name           : Tenzorum Token
-// Initial supply : 1,237,433,627
-// Total supply   : 2,474,867,254 - 2 * initial supply, minted over 20 years
 // Decimals       : 18
+// Initial supply : 1,237,433,627
+// Total supply   : 2,474,867,254
+//
+// Notes          : Total supply will be reached in 20 years and equals to two times initial supply.
+//                  Minting rate decreases linearly as limited in 'maxAllowedSupply' function.
 //
 // Author: Radek Ostrowski / https://startonchain.com
 // ---------------------------------------------------------------------

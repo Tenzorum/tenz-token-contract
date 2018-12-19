@@ -44,13 +44,14 @@ contract TenzorumToken is MultiOwnable {
     uint256 public constant initialSupply = 1237433627 * (10 ** uint256(decimals));
     uint256 public constant maxSupply = initialSupply * 2;
 
-    uint256 public constant a1 = 2354325774353120243531;
+    uint256 public constant d = 2354325774353120243531;
     uint256 public constant r = 2239657547574836; //r is negative
 
     //Single time period is equal to 10 minutes - 600 seconds;
     uint256 public constant periodUnit = 10 minutes;
     //Time when tokens become openly transferable - period zero
     uint256 public firstPeriodStart;
+    //Last period - 2 years
     uint256 public constant lastPeriod = 1051200;
 
     mapping(address => uint256) public balances;
@@ -226,20 +227,20 @@ contract TenzorumToken is MultiOwnable {
         if(_period == 0) return initialSupply;
         if(_period >= lastPeriod) return maxSupply;
 
-        //sum of newly minted tokens at given period
-        uint256 sn = _period*(2*a1-r*(_period-1))/2;
+        //Allowed sum of newly minted tokens at given period (arithmetic progression equation)
+        uint256 sumForPeriod = _period * ( 2 * d - r * (_period - 1)) / 2;
 
-        uint256 currentMaxSupply = initialSupply + sn;
+        uint256 currentMaxSupply = initialSupply + sumForPeriod;
         if(currentMaxSupply > maxSupply) return maxSupply;
         return currentMaxSupply;
     }
 
     /**
-     * @dev Mints a specific amount of tokens restricted by the total supply formulae
+     * @dev Mints a specific amount of tokens restricted by the total supply formulae.
      * @param _value The amount of tokens to be minted,
-     *               if bigger than the allowed amount the maximum allowed amount will be minted
+     *               if bigger than the allowed amount the maximum allowed amount will be minted.
      */
-    function mint(address _recipient, uint256 _value) anyOwner canTransfer public returns (uint256 mintAmount) {
+    function mint(address _recipient, uint256 _value) anyOwner public returns (uint256 mintAmount) {
         uint256 currentMaxAllowedSupply = maxAllowedSupply(currentPeriod());
         uint256 allowedToMint = currentMaxAllowedSupply.sub(totalSupply);
         if (allowedToMint < _value) {
@@ -253,18 +254,25 @@ contract TenzorumToken is MultiOwnable {
     }
 
     /**
-     * @dev Enables the transfer of tokens for everyone
+     * @dev Begins the minting period.
+     */
+    function startMintingPeriod() anyOwner public {
+        require(transferable);
+        firstPeriodStart = now;
+    }
+
+    /**
+     * @dev Enables the transfer of tokens for everyone.
      */
     function enableTransfers() anyOwner public {
         require(!transferable);
         transferable = true;
-        firstPeriodStart = now;
         emit TransfersEnabled();
     }
 
     /**
-     * @dev Assigns the special transfer right, before transfers are enabled
-     * @param _to The address receiving the transfer grant
+     * @dev Assigns the special transfer right, before transfers are enabled.
+     * @param _to The address receiving the transfer grant.
      */
     function grantTransferRight(address _to) anyOwner public {
         require(!transferable);
@@ -275,8 +283,8 @@ contract TenzorumToken is MultiOwnable {
     }
 
     /**
-     * @dev Removes the special transfer right, before transfers are enabled
-     * @param _from The address that the transfer grant is removed from
+     * @dev Removes the special transfer right, before transfers are enabled.
+     * @param _from The address that the transfer grant is removed from.
      */
     function cancelTransferRight(address _from) anyOwner public {
         require(!transferable);
@@ -297,7 +305,7 @@ contract TenzorumToken is MultiOwnable {
     }
 
     /**
-     * @dev Allows to transfer out the ether balance that was forced into this contract, e.g with `selfdestruct`
+     * @dev Allows to transfer out the ether balance that was forced into this contract, e.g with `selfdestruct`.
      */
     function withdrawEther() anyOwner public {
         uint256 totalBalance = address(this).balance;

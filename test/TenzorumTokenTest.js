@@ -344,7 +344,15 @@ contract('Tenzorum Token', (accounts) => {
         await token.mint(user1, oneToken, {from: owner});
         assert(0 == (await token.balanceOf.call(user1)).toNumber(), "shouldn't mint any tokens at this point");
 
+        try {
+            await token.startMintingPeriod();
+            assert(false);
+        } catch (e) {
+            expectRevert(e, "Need to enable transfers first");
+        }
+
         await token.enableTransfers();
+        await token.startMintingPeriod();
         assert((await token.firstPeriodStart.call()).toNumber() > 0, "firstPeriodStart is set");
 
         await token.mint(user1, threeBillionTokens, {from: owner});
@@ -377,11 +385,13 @@ contract('Tenzorum Token', (accounts) => {
         assert(maxSupply == (await token.totalSupply.call()).toNumber(), "shouldn't mint any more tokens at this point");
     });
 
-    it("currentPeriod works correctly", async () => {
+    it("CurrentPeriod works correctly", async () => {
         assert(0 == (await token.firstPeriodStart.call()), "firstPeriodStart is not set yet");
         assert(0 == await token.currentPeriod.call(), "current period should be 0");
 
         await token.enableTransfers();
+        await token.startMintingPeriod();
+
         assert(0 == await token.currentPeriod.call(), "current period should still be 0");
 
         increaseTime(periodUnit);
@@ -391,11 +401,13 @@ contract('Tenzorum Token', (accounts) => {
         assert(2 == await token.currentPeriod.call(), "current period should still be 2");
     });
 
-    it("maxAllowedSupply works correctly", async () => {
+    it("MaxAllowedSupply works correctly", async () => {
         assert(0 == (await token.firstPeriodStart.call()), "firstPeriodStart is not set yet");
         assert(initSupply == (await token.maxAllowedSupply.call(0)).toNumber(), "minting not started, should be at initial supply");
 
         await token.enableTransfers();
+        await token.startMintingPeriod();
+
         assert((await token.firstPeriodStart.call()).toNumber() > 0, "firstPeriodStart is set");
 
         const expectedFirstValues = [1237433627, 1237435981, 1237438335, 1237440689, 1237443044, 1237445398, 1237447752, 1237450107, 1237452461, 1237454815, 1237457170];
